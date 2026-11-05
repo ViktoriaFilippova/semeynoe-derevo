@@ -27,10 +27,18 @@ body{display:grid;place-items:center;padding:24px 16px;background:radial-gradien
 <script>
 // Секрет — только в ссылке после «#»: эта часть адреса не уходит на сервер. Ключ шифра = SHA-256 от секрета.
 (async () => {
-  const say = t => { document.getElementById('msg').textContent = t; };
+  // Язык — как на самом сайте (i18n.js): из ссылки, из прошлого выбора, иначе по языку браузера
+  const en = (() => {
+    try { const q = new URLSearchParams(location.search).get('lang'); if (q === 'en' || q === 'ru') return q === 'en'; } catch (_) {}
+    try { const s = localStorage.getItem('ft-lang'); if (s === 'en' || s === 'ru') return s === 'en'; } catch (_) {}
+    const nav = (navigator.languages || [navigator.language]).filter(Boolean);
+    return !!nav.length && !nav.some(l => /^(ru|uk|be)\b/i.test(l));
+  })();
+  const say = (ru, eng) => { document.getElementById('msg').textContent = en ? eng : ru; };
+  if (en) { document.documentElement.lang = 'en'; document.title = 'Family tree'; document.querySelector('.lock h1').textContent = 'Family tree'; say('', 'Opening…'); }
   const m = location.hash.match(/^#(?:k=)?([A-Za-z0-9_-]{16,64})(?=&|$)/);
-  if (!m) { say('Это семейный сайт. Он открывается только по ссылке, которую прислали родные.'); addEventListener('hashchange', () => location.reload()); return; }
-  if (!window.crypto || !crypto.subtle) { say('Этот браузер слишком старый. Откройте ссылку в Safari или Chrome.'); return; }
+  if (!m) { say('Это семейный сайт. Он открывается только по ссылке, которую прислали родные.', 'This is a family website. It opens only from the link your relatives sent you.'); addEventListener('hashchange', () => location.reload()); return; }
+  if (!window.crypto || !crypto.subtle) { say('Этот браузер слишком старый. Откройте ссылку в Safari или Chrome.', 'This browser is too old. Open the link in Safari or Chrome.'); return; }
   try {
     const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(m[1]));
     const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
@@ -63,7 +71,8 @@ body{display:grid;place-items:center;padding:24px 16px;background:radial-gradien
     for (const code of scripts) { const s = document.createElement('script'); s.textContent = code; document.body.appendChild(s); }
   } catch (e) {
     // Неверный ключ — это ошибка расшифровки (OperationError); всё остальное — сеть
-    say(e && e.name === 'OperationError' ? 'Ссылка неполная или устарела. Попросите у родных новую.' : 'Не получилось загрузить. Проверьте интернет и откройте ссылку ещё раз.');
+    if (e && e.name === 'OperationError') say('Ссылка неполная или устарела. Попросите у родных новую.', 'The link is incomplete or out of date. Ask your relatives for a new one.');
+    else say('Не получилось загрузить. Проверьте интернет и откройте ссылку ещё раз.', 'Could not load. Check your internet connection and open the link again.');
   }
 })();
 </script>
