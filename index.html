@@ -25,14 +25,14 @@ body{display:grid;place-items:center;padding:24px 16px;background:radial-gradien
   <p id="msg">Открываю…</p>
 </main>
 <script>
-// Ключ — только в ссылке после «#k=»: эта часть адреса не уходит на сервер.
+// Секрет — только в ссылке после «#»: эта часть адреса не уходит на сервер. Ключ шифра = SHA-256 от секрета.
 (async () => {
   const say = t => { document.getElementById('msg').textContent = t; };
-  const m = location.hash.match(/(?:^#|&)k=([A-Za-z0-9_-]{43})/);
+  const m = location.hash.match(/^#(?:k=)?([A-Za-z0-9_-]{16,64})(?=&|$)/);
   if (!m) { say('Это семейный сайт. Он открывается только по ссылке, которую прислали родные.'); addEventListener('hashchange', () => location.reload()); return; }
   if (!window.crypto || !crypto.subtle) { say('Этот браузер слишком старый. Откройте ссылку в Safari или Chrome.'); return; }
   try {
-    const raw = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '='), c => c.charCodeAt(0));
+    const raw = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(m[1]));
     const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
     const open = buf => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
     const res = await fetch('site.bin', { cache: 'no-cache' }).catch(() => { throw new Error('net'); });
