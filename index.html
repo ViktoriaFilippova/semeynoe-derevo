@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex">
+<meta name="referrer" content="no-referrer">
+<title>Семейное дерево</title>
+<link rel="icon" href="leaf.webp" type="image/webp">
+<style>
+:root{--bg:#020B08;--gold:#E2BF78;--soft:#C6C7B7}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{display:grid;place-items:center;padding:24px 16px;background:radial-gradient(ellipse 90% 80% at 50% 42%,#0B2C22,#061A14 50%,var(--bg));color:#F4EBDD;font:400 16px/1.5 Georgia,serif;text-align:center}
+.lock{max-width:420px}
+.lock img{width:150px;margin:0 auto 18px;display:block;opacity:.9}
+.lock h1{margin:0;font:400 34px/1.1 Georgia,serif;color:var(--gold)}
+.lock p{margin:12px 0 0;color:var(--soft);font:400 15.5px/1.5 system-ui,-apple-system,sans-serif}
+</style>
+</head>
+<body>
+<main class="lock" id="lock">
+  <img src="sprig-long.webp" alt="">
+  <h1>Семейное дерево</h1>
+  <p id="msg">Открываю…</p>
+</main>
+<script>
+// Ключ — только в ссылке после «#k=»: эта часть адреса не уходит на сервер.
+(async () => {
+  const say = t => { document.getElementById('msg').textContent = t; };
+  const m = location.hash.match(/(?:^#|&)k=([A-Za-z0-9_-]{43})/);
+  if (!m) { say('Это семейный сайт. Он открывается только по ссылке, которую прислали родные.'); addEventListener('hashchange', () => location.reload()); return; }
+  if (!window.crypto || !crypto.subtle) { say('Этот браузер слишком старый. Откройте ссылку в Safari или Chrome.'); return; }
+  try {
+    const raw = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '='), c => c.charCodeAt(0));
+    const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    const open = buf => crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
+    const res = await fetch('site.bin', { cache: 'no-cache' }).catch(() => { throw new Error('net'); });
+    if (!res.ok) throw new Error('net');
+    const data = await res.arrayBuffer().catch(() => { throw new Error('net'); });
+    const html = new TextDecoder().decode(await open(data));
+
+    // Фото и сканы тоже зашифрованы: расшифровываем по мере появления на странице
+    const cache = new Map(), type = p => /\.png$/i.test(p) ? 'image/png' : /\.webp$/i.test(p) ? 'image/webp' : 'image/jpeg';
+    window.encSrc = (el, p) => {
+      const name = (window.FAMILY_FILES || {})[p];
+      el.dataset.ep = p;
+      if (!name) { el.removeAttribute('src'); return; }
+      if (!cache.has(p)) cache.set(p, fetch('' + name).then(r => r.arrayBuffer()).then(open).then(b => URL.createObjectURL(new Blob([b], { type: type(p) }))));
+      cache.get(p).then(u => { if (el.dataset.ep === p) el.src = u; }, () => {});
+    };
+    const resolve = n => { if (n.nodeType !== 1) return; (n.matches('[data-esrc]') ? [n] : []).concat([...n.querySelectorAll('[data-esrc]')]).forEach(el => { const p = el.getAttribute('data-esrc'); el.removeAttribute('data-esrc'); window.encSrc(el, p); }); };
+    new MutationObserver(ms => ms.forEach(r => r.addedNodes.forEach(resolve))).observe(document.documentElement, { childList: true, subtree: true });
+
+    // Ставим расшифрованную страницу на место замка и запускаем её скрипты по порядку
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    document.documentElement.lang = doc.documentElement.lang;
+    document.title = doc.title;
+    document.head.innerHTML = doc.head.innerHTML;
+    const scripts = [...doc.body.querySelectorAll('script')].map(s => { s.remove(); return s.textContent; });
+    const body = document.importNode(doc.body, true);
+    document.body.replaceWith(body);
+    for (const code of scripts) { const s = document.createElement('script'); s.textContent = code; document.body.appendChild(s); }
+  } catch (e) {
+    // Неверный ключ — это ошибка расшифровки (OperationError); всё остальное — сеть
+    say(e && e.name === 'OperationError' ? 'Ссылка неполная или устарела. Попросите у родных новую.' : 'Не получилось загрузить. Проверьте интернет и откройте ссылку ещё раз.');
+  }
+})();
+</script>
+</body>
+</html>
